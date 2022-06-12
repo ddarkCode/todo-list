@@ -1,4 +1,8 @@
+require('dotenv').config();
 const express = require('express');
+const { connect, model, Schema } = require('mongoose');
+
+const day = require('./date')();
 
 const app = express();
 
@@ -6,24 +10,72 @@ app.use(express.static('public'));
 app.use(express.urlencoded({ extended: true }));
 app.set('view engine', 'ejs');
 
-let todos = ['Buy Food', 'Cook Food', 'Eat Food'];
+connect(
+  process.env.MONGO_URL,
+  {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  },
+  () => {
+    console.log('Database Connected');
+  }
+);
 
-app.get('/', (req, res) => {
-  const today = new Date();
-  const options = {
-    day: 'numeric',
-    weekday: 'long',
-    month: 'long',
-  };
-  console.log(options);
-  const day = today.toLocaleDateString('en-US', options);
-  res.render('list', { day, todos });
+const todolistSchema = new Schema({
+  name: String,
 });
 
-app.post('/', (req, res) => {
-  const { todo } = req.body;
-  todos = todos.concat(todo);
-  res.redirect('/');
+const Todo = model('Todo', todolistSchema);
+
+const item1 = new Todo({
+  name: 'Welcome to your todolist',
+});
+const item2 = new Todo({
+  name: 'Hit the + button to add new item',
+});
+const item3 = new Todo({
+  name: '<-- Hit this to delete an item.',
 });
 
-app.listen(5000, () => console.log('Server is running on port 5000'));
+const todos = [item1, item2, item3];
+
+app
+  .route('/')
+  .get((req, res) => {
+    Todo.find((err, foundTodos) => {
+      if (err) {
+        console.log(err);
+      } else {
+        if (foundTodos.length === 0) {
+          Todo.insertMany(todos, function (err, insertedTodos) {
+            if (err) {
+              console.log(err);
+            } else {
+              console.log(insertedTodos);
+              res.redirect('/');
+            }
+          });
+        } else {
+          res.render('list', { listTitle: day, items: foundTodos });
+        }
+      }
+    });
+  })
+  .post((req, res) => {
+    console.log(req.body);
+    const { todo } = req.body;
+    const newTodo = new Todo({
+      name: todo,
+    });
+    newTodo.save((err) => {
+      if (err) {
+        console.log(err);
+      } else {
+        res.redirect('/');
+      }
+    });
+  });
+
+app.listen(process.env.PORT, () =>
+  console.log(`Server is running on port ${process.env.PORT}`)
+);
